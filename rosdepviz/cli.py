@@ -8,9 +8,8 @@ import graphviz
 
 # Calculate the default ROS_SRC_DIR relative to the script's location
 script_dir = os.path.dirname(__file__)
-# Go up two directories (from rosdepviz/cli.py to ROSDepViz/ to parent of ROSDepViz)
-# then into ros_indigo/src
-ROS_SRC_DIR = os.path.abspath(os.path.join(script_dir, "..", "..", "ros_indigo", "src"))
+# Set ROS_SRC_DIR to the current directory
+ROS_SRC_DIR = os.path.abspath(".")
 
 
 def parse_package_xml(package_xml_path):
