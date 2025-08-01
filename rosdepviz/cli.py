@@ -1,8 +1,7 @@
 import os
 import sys
 
-# trunk-ignore(bandit/B405)
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from collections import defaultdict
 
 import graphviz
