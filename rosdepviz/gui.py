@@ -1,9 +1,10 @@
 import os
-import xml.etree.ElementTree as ET
-from collections import defaultdict
-import subprocess
 import sys
 import tempfile
+from collections import defaultdict
+
+import graphviz
+import defusedxml.ElementTree as ET
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QComboBox, QLabel, QScrollArea, QLineEdit, QPushButton, QFileDialog,
                              QProgressDialog, QMessageBox)
@@ -88,8 +89,7 @@ class DependencyViewer(QWidget):
         """)
 
         # Initial ROS_SRC_DIR
-        script_dir = os.path.dirname(__file__)
-        default_ros_src_dir = os.path.abspath(os.path.join(script_dir, '..', '..', 'ros_indigo', 'src'))
+        default_ros_src_dir = os.path.abspath(".")
         self.ros_src_dir = default_ros_src_dir
 
         self.all_packages = {} # Stores only packages found within self.ros_src_dir
@@ -116,7 +116,7 @@ class DependencyViewer(QWidget):
                         dependencies.add(dep.text)
             return name, list(dependencies)
         except Exception as e:
-            # print(f"Error parsing {package_xml_path}: {e}")
+            print(f"Error parsing {package_xml_path}: {e}")
             return None, []
 
     def find_package_xml_path(self, package_name):
@@ -389,95 +389,81 @@ class DependencyViewer(QWidget):
         QApplication.processEvents() # Update GUI
 
         try:
-            # Generate DOT content
-            dot_content = self._generate_dot_content_for_static_image(current_package)
+            # Create a Graphviz Digraph using the library
+            dot = graphviz.Digraph(comment='Dependency Tree')
+            dot.attr(rankdir='LR')
+            dot.attr('node', shape='box')
 
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.dot') as dot_file:
-                dot_file.write(dot_content)
-                dot_filepath = dot_file.name
+            # Build the subgraph for the static image
+            subgraph_nodes = set()
+            subgraph_edges = defaultdict(list)
 
-            png_filepath = os.path.join(tempfile.gettempdir(), f"{current_package}_dependency_tree.png")
+            queue = [current_package]
+            visited_for_subgraph = set()
 
-            # Run Graphviz dot command
-            subprocess.run(["dot", "-Tpng", dot_filepath, "-o", png_filepath], check=True)
+            while queue:
+                current_pkg = queue.pop(0)
+                if current_pkg in visited_for_subgraph:
+                    continue
+                visited_for_subgraph.add(current_pkg)
+                subgraph_nodes.add(current_pkg)
+
+                # Get all dependencies (internal and external)
+                deps = self.forward_dependencies.get(current_pkg, [])
+                for dep in deps:
+                    subgraph_edges[current_pkg].append(dep)
+                    # Only add to queue if it's an internal package, to limit traversal to our known packages
+                    # For external packages, we just show them as a leaf in this subgraph
+                    if dep in self.all_packages and dep not in visited_for_subgraph:
+                        queue.append(dep)
+
+            # Determine leaf nodes within this specific subgraph
+            nodes_with_outgoing_edges_in_subgraph = set(subgraph_edges.keys())
+            all_nodes_in_subgraph = set(subgraph_nodes)
+            for deps_list in subgraph_edges.values():
+                for dep_node in deps_list:
+                    all_nodes_in_subgraph.add(dep_node)
+
+            leaf_nodes_in_subgraph = all_nodes_in_subgraph - nodes_with_outgoing_edges_in_subgraph
+
+            # Add nodes with styling
+            for package in sorted(list(all_nodes_in_subgraph)):
+                if package == current_package:
+                    dot.node(package, style='filled', fillcolor='lightblue')  # Highlight the starting package
+                elif package in leaf_nodes_in_subgraph:
+                    # Check if it's an external package (not in self.all_packages)
+                    if package not in self.all_packages:
+                        dot.node(package, style='filled', fillcolor='lightgray', fontcolor='dimgray')  # External leaf
+                    else:
+                        dot.node(package, style='filled', fillcolor='lightgreen')  # Internal leaf
+                elif package not in self.all_packages:
+                    dot.node(package, style='filled', fillcolor='lightgray', fontcolor='dimgray')  # External non-leaf
+                else:
+                    dot.node(package)
+
+            # Add edges
+            for package, dependencies in subgraph_edges.items():
+                for dep in dependencies:
+                    dot.edge(package, dep)
+
+            # Render the graph and open the image
+            png_filepath = os.path.join(tempfile.gettempdir(), f"{current_package}_dependency_tree")
+            dot.render(png_filepath, format='png', cleanup=True)
+            png_filepath += '.png'
 
             # Open the image
+            import webbrowser
             if sys.platform == "win32":
                 os.startfile(png_filepath)
             elif sys.platform == "darwin":
-                subprocess.run(["open", png_filepath])
-            else: # Linux
-                subprocess.run(["xdg-open", png_filepath])
+                webbrowser.open(f"file://{png_filepath}")
+            else:  # Linux
+                webbrowser.open(f"file://{png_filepath}")
 
-        except FileNotFoundError:
-            QMessageBox.critical(self, "Error", "Graphviz 'dot' command not found. Please install Graphviz.")
-        except subprocess.CalledProcessError as e:
-            QMessageBox.critical(self, "Error", f"Failed to generate image with Graphviz: {e}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An unexpected error occurred: {e}")
         finally:
             progress_dialog.close()
-            if 'dot_filepath' in locals() and os.path.exists(dot_filepath):
-                os.remove(dot_filepath) # Clean up temporary dot file
-
-    def _generate_dot_content_for_static_image(self, start_package_name):
-        # Build the subgraph for the static image
-        subgraph_nodes = set()
-        subgraph_edges = defaultdict(list)
-        
-        queue = [start_package_name]
-        visited_for_subgraph = set()
-
-        while queue:
-            current_pkg = queue.pop(0)
-            if current_pkg in visited_for_subgraph:
-                continue
-            visited_for_subgraph.add(current_pkg)
-            subgraph_nodes.add(current_pkg)
-
-            # Get all dependencies (internal and external)
-            deps = self.forward_dependencies.get(current_pkg, [])
-            for dep in deps:
-                subgraph_edges[current_pkg].append(dep)
-                # Only add to queue if it's an internal package, to limit traversal to our known packages
-                # For external packages, we just show them as a leaf in this subgraph
-                if dep in self.all_packages and dep not in visited_for_subgraph:
-                    queue.append(dep)
-
-        dot_content = "digraph DependencyTree {\n"
-        dot_content += "  rankdir=LR;\n"
-        dot_content += "  node [shape=box];\n"
-
-        # Determine leaf nodes within this specific subgraph
-        nodes_with_outgoing_edges_in_subgraph = set(subgraph_edges.keys())
-        all_nodes_in_subgraph = set(subgraph_nodes)
-        for deps_list in subgraph_edges.values():
-            for dep_node in deps_list:
-                all_nodes_in_subgraph.add(dep_node)
-        
-        leaf_nodes_in_subgraph = all_nodes_in_subgraph - nodes_with_outgoing_edges_in_subgraph
-
-        for package in sorted(list(all_nodes_in_subgraph)):
-            node_style = ""
-            if package == start_package_name:
-                node_style = ' [style=filled, fillcolor=lightblue]' # Highlight the starting package
-            elif package in leaf_nodes_in_subgraph:
-                # Check if it's an external package (not in self.all_packages)
-                if package not in self.all_packages:
-                    node_style = ' [style=filled, fillcolor=lightgray, fontcolor=dimgray]' # External leaf
-                else:
-                    node_style = ' [style=filled, fillcolor=lightgreen]' # Internal leaf
-            elif package not in self.all_packages:
-                node_style = ' [style=filled, fillcolor=lightgray, fontcolor=dimgray]' # External non-leaf
-            
-            dot_content += f'  \"{package}\"{node_style};\n'
-
-        for package, dependencies in subgraph_edges.items():
-            for dep in dependencies:
-                dot_content += f'  \"{package}\" -> \"{dep}\";\n'
-        
-        dot_content += "}\n"
-        return dot_content
 
 
 if __name__ == '__main__':
