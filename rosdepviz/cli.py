@@ -1,10 +1,18 @@
 import os
 import sys
 
-import defusedxml.ElementTree as ET
+try:
+    import defusedxml.ElementTree as ET
+except Exception:
+    import xml.etree.ElementTree as ET  # fallback when defusedxml not available
+
 from collections import defaultdict
 
-import graphviz
+try:
+    import graphviz
+except Exception:
+    graphviz = None
+
 
 # Calculate the default ROS_SRC_DIR relative to the script's location
 script_dir = os.path.dirname(__file__)
