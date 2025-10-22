@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Run tests with coverage and upload to Codecov using the codecov CLI.
 # Usage: scripts/coverage_upload.sh
-# Requires: pytest, coverage, codecov (python package 'codecov') installed in environment.
+# Requires: pytest, coverage, codecov-cli (python package 'codecov-cli') installed in environment.
 
 # Run pytest with coverage and generate xml report (prefer pytest-cov plugin when available)
 rc_pytest=0
@@ -38,38 +38,13 @@ else
     # Continue to attempt upload anyway so CI logs the failure from codecov uploader
 fi
 
-# Prepare token argument if CODECOV_TOKEN is present
-TOKEN_ARG=""
-if [ -n "${CODECOV_TOKEN:-}" ]; then
-    echo "Using CODECOV_TOKEN from environment"
-    TOKEN_ARG="-t ${CODECOV_TOKEN}"
-else
-    echo "CODECOV_TOKEN not set. If this repo requires a token for uploads, the upload may fail." >&2
-fi
-
-# Upload using codecov CLI (python package), fall back to bash uploader if it fails
-if command -v codecov >/dev/null 2>&1; then
-    if ! sh -c "codecov ${TOKEN_ARG} -f coverage.xml -v"; then
-        echo "codecov python CLI failed; falling back to bash uploader" >&2
-        # fallthrough to bash uploader
-        :
-    else
-        exit 0
-    fi
-fi
-
-# Fallback: use Codecov bash uploader
-if command -v curl >/dev/null 2>&1; then
-    if ! sh -c "curl -sSfL https://codecov.io/bash | bash -s -- ${TOKEN_ARG} -f coverage.xml"; then
-        echo "Codecov bash uploader failed" >&2
-        exit 3
-    fi
-elif command -v wget >/dev/null 2>&1; then
-    if ! sh -c "wget -qO- https://codecov.io/bash | bash -s -- ${TOKEN_ARG} -f coverage.xml"; then
-        echo "Codecov bash uploader failed" >&2
+# Upload using codecov-cli
+if command -v codecov-cli >/dev/null 2>&1; then
+    if ! sh -c "codecov-cli upload-process"; then
+        echo "codecov-cli failed" >&2
         exit 3
     fi
 else
-    echo "Neither codecov CLI nor curl/wget available to upload coverage" >&2
+    echo "codecov-cli not found, please install it with 'pip install codecov-cli'" >&2
     exit 4
 fi

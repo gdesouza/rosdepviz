@@ -19,7 +19,7 @@ blocks:
             - flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
             - pip install pytest
             - pip install coverage pytest-cov
-            - pip install codecov
+            - pip install codecov-cli
             - coverage run -m pytest -q
             - coverage report -m
             - scripts/coverage_upload.sh
