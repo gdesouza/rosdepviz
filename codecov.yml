@@ -1,0 +1,41 @@
+# Codecov configuration file
+# See: https://docs.codecov.com/docs/codecov-yaml
+
+# Coverage report formatting
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+
+# Paths to ignore from coverage reporting
+ignore:
+  - "tests/*"
+  - "scripts/*"
+  - "junit.xml"
+
+# Status checks for project-level and PR/patch-level coverage targets
+status:
+  project:
+    default:
+      target: 80%
+  patch:
+    default:
+      target: 80%
+
+# Comment settings for pull requests
+comment:
+  layout: "header, diff, files"
+  behavior: default
+
+# Parsers configuration (example for gcov/branch detection)
+parsers:
+  gcov:
+    branch_detection:
+      conditional: yes
+      loop: yes
+      method: yes
+      macro: no
+
+# Notify teams on changes (disabled by default)
+notify:
+  after_n_builds: 1
