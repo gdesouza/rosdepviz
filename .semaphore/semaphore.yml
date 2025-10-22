@@ -23,3 +23,5 @@ blocks:
             - coverage run -m pytest -q
             - coverage report -m
             - scripts/coverage_upload.sh
+      secrets:
+        - name: Codecov Token
