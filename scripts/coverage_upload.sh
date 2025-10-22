@@ -32,9 +32,18 @@ else
     # Continue to attempt upload anyway so CI logs the failure from codecov uploader
 fi
 
+# Prepare token argument if CODECOV_TOKEN is present
+TOKEN_ARG=""
+if [ -n "${CODECOV_TOKEN:-}" ]; then
+    echo "Using CODECOV_TOKEN from environment"
+    TOKEN_ARG="-t ${CODECOV_TOKEN}"
+else
+    echo "CODECOV_TOKEN not set. If this repo requires a token for uploads, the upload may fail." >&2
+fi
+
 # Upload using codecov CLI (python package), fall back to bash uploader if it fails
 if command -v codecov >/dev/null 2>&1; then
-    if ! codecov -f coverage.xml -v; then
+    if ! sh -c "codecov ${TOKEN_ARG} -f coverage.xml -v"; then
         echo "codecov python CLI failed; falling back to bash uploader" >&2
         # fallthrough to bash uploader
         :
@@ -45,9 +54,15 @@ fi
 
 # Fallback: use Codecov bash uploader
 if command -v curl >/dev/null 2>&1; then
-    curl -sSfL https://codecov.io/bash | bash -s -- -f coverage.xml || { echo "Codecov bash uploader failed" >&2; exit 3; }
+    if ! sh -c "curl -sSfL https://codecov.io/bash | bash -s -- ${TOKEN_ARG} -f coverage.xml"; then
+        echo "Codecov bash uploader failed" >&2
+        exit 3
+    fi
 elif command -v wget >/dev/null 2>&1; then
-    wget -qO- https://codecov.io/bash | bash -s -- -f coverage.xml || { echo "Codecov bash uploader failed" >&2; exit 3; }
+    if ! sh -c "wget -qO- https://codecov.io/bash | bash -s -- ${TOKEN_ARG} -f coverage.xml"; then
+        echo "Codecov bash uploader failed" >&2
+        exit 3
+    fi
 else
     echo "Neither codecov CLI nor curl/wget available to upload coverage" >&2
     exit 4
