@@ -1,4 +1,5 @@
 # ROSDepViz
+[![Build Status](https://gdesouza.semaphoreci.com/badges/rosdepviz/branches/main.svg?style=shields&key=5ef68252-465a-4d83-9aa0-42b1335d5ec1)](https://gdesouza.semaphoreci.com/projects/rosdepviz)
 
 ROSDepViz (ROS Dependency Visualizer) is a Python-based tool designed to help developers understand and navigate the dependency tree of ROS (Robot Operating System) packages within a specified source directory. It provides a graphical user interface (GUI) to explore package relationships, showing direct dependencies and dependents.
 
