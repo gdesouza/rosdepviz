@@ -5,18 +5,24 @@ set -euo pipefail
 # Usage: scripts/coverage_upload.sh
 # Requires: pytest, coverage, codecov (python package 'codecov') installed in environment.
 
-# Run pytest with coverage and generate xml report
-pytest --cov=rosdepviz --cov-report=xml --cov-report=term || true
+# Run pytest with coverage and generate xml report (prefer pytest-cov plugin when available)
+rc_pytest=0
+pytest --cov=rosdepviz --cov-report=xml --cov-report=term || rc_pytest=$?
 
-# Ensure coverage.xml exists. If not, try to generate it from the .coverage data file.
+# If pytest didn't produce coverage.xml (e.g., pytest-cov plugin missing), run via coverage run
+rc_cov=0
 if [ -f coverage.xml ]; then
-    echo "Found coverage.xml"
+    echo "Found coverage.xml (produced by pytest with pytest-cov)"
 else
     if [ -f .coverage ]; then
         echo "coverage.xml not found, generating from .coverage"
         coverage xml -o coverage.xml || echo "coverage xml generation failed" >&2
     else
-        echo "No .coverage file found; coverage.xml not present" >&2
+        echo "pytest --cov did not produce coverage info (rc=$rc_pytest). Running 'coverage run -m pytest -q' to generate coverage." >&2
+        coverage run -m pytest -q || rc_cov=$?
+        if [ -f .coverage ]; then
+            coverage xml -o coverage.xml || echo "coverage xml generation failed" >&2
+        fi
     fi
 fi
 
